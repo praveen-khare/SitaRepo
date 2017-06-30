@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:int="http://www.springframework.org/schema/integration"
+    xmlns:int-file="http://www.springframework.org/schema/integration/file"
+    xmlns:context="http://www.springframework.org/schema/context" xmlns:p="http://www.springframework.org/schema/p"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+            http://www.springframework.org/schema/beans/spring-beans.xsd
+            http://www.springframework.org/schema/integration
+            http://www.springframework.org/schema/integration/spring-integration.xsd
+            http://www.springframework.org/schema/integration/file
+            http://www.springframework.org/schema/integration/file/spring-integration-file.xsd
+            http://www.springframework.org/schema/context 
+            http://www.springframework.org/schema/context/spring-context.xsd">
+
+	
+	 <bean id="placeholderConfig" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+	     <property name="location">
+	         <value>/WEB-INF/config/application.properties</value>
+	     </property>
+	</bean>
+	
+	<int:channel id="outputChannel"/>
+	<int:channel id="processedChannel"/>
+	<int:channel id="problemChannel"/>
+	<int:channel id="writeOutputChannel"/>
+	<int:channel id="pollableChannel"/>
+	 
+    <int-file:inbound-channel-adapter channel="pollableChannel" directory="${input.folder.location}" filename-pattern="*.txt" auto-startup="true">
+        <int:poller id="poller" fixed-delay="10" />
+    </int-file:inbound-channel-adapter>
+        
+    <int-file:file-to-string-transformer input-channel="pollableChannel" output-channel="routeChannel" charset="UTF-8"/>       
+	
+     <int:router input-channel="routeChannel" ref="customRouter"/>
+        
+     <bean id="customRouter" class="aero.sita.asl.processor.CustomRouter" autowire="byName">
+     </bean>
+    
+   <int:service-activator input-channel="outputChannel" ref="messageProcesser" method="buildValidMessages" output-channel="writeOutputChannel" />
+		<bean id="messageProcesser" class="aero.sita.asl.processor.ProcessValidMessages">
+    </bean>
+    
+    <int-file:outbound-channel-adapter id="writeOutputChannel"
+        directory="${output.folder.location}" auto-create-directory="true" filename-generator="outputfileNameGenerator"/>
+        
+    <int-file:outbound-channel-adapter id="processedChannel"
+        directory="${processed.folder.location}" auto-create-directory="true" filename-generator="processedfileNameGenerator" delete-source-files="true"/>
+        
+     <bean id="processedfileNameGenerator" class="aero.sita.asl.processor.FilesGenerator" >
+     <property name="fileExtension" value="PROCESSED"></property>
+     </bean>
+     
+     <bean id="outputfileNameGenerator" class="aero.sita.asl.processor.FilesGenerator" >
+     <property name="fileExtension" value="OUTPUT"></property>
+     </bean>   
+     
+     <bean id="errorfileNameGenerator" class="aero.sita.asl.processor.FilesGenerator" >
+     <property name="fileExtension" value="ERROR"></property>
+     </bean>  
+    
+     <int-file:outbound-channel-adapter channel="problemChannel"  directory="${error.folder.location}" auto-create-directory="true" filename-generator="errorfileNameGenerator" delete-source-files="true"/>
+</beans>
